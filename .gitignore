@@ -1,0 +1,6 @@
+myconfig.h
+Configuration_Secure.h
+*.swp
+*.bak
+.pio/
+.vscode/
