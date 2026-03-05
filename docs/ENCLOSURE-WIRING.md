@@ -639,6 +639,49 @@ Photo sync via `M118 P1 TAKE_PHOTO` or a custom command.
 - Total SPI cable length (board SPI1 → IDM10 #2 → breakout) should be ≤50 cm. If unstable, use software SPI with reduced clock.
 - Only used for calibration (not during printing) — temporary connection is acceptable.
 
+#### Alternative: ADXL345 via Orange Pi SPI1 (recommended)
+
+Connecting the accelerometer to the MCU's SPI1 overloads the STM32G0B1 during
+`SHAPER_CALIBRATE` (SPI reads + stepper vibration + TMC UART polling → UART
+timeouts). A better option is to wire the ADXL345 directly to the Orange Pi
+Zero 2W's SPI1, which acts as a Klipper secondary MCU (`klipper-mcu` service).
+The ADXL345 FIFO buffers samples internally, so Linux scheduling jitter does
+not affect measurement quality.
+
+**Orange Pi Zero 2W SPI1 pinout:**
+
+| ADXL345 (GY-291) | Orange Pi pin | Function   |
+|-------------------|---------------|------------|
+| VCC               | 3.3 V         | Power (≤3 mA — safe from SBC regulator) |
+| GND               | GND           |            |
+| CS                | PH5           | SPI1_CS0   |
+| SCL               | PH6           | SPI1_CLK   |
+| SDA               | PH7           | SPI1_MOSI  |
+| SDO               | PH8           | SPI1_MISO  |
+
+**Setup steps (summary):**
+
+1. Enable SPI1 overlay in Armbian (`/boot/armbianEnv.txt`, `overlays=spi-spidev`).
+   Verify `/dev/spidev1.0` appears after reboot.
+2. Build & install Klipper Linux MCU:
+   ```
+   cd ~/klipper && make menuconfig   # select "Linux process"
+   make && sudo make flash
+   sudo cp scripts/klipper-mcu.service /etc/systemd/system/
+   sudo systemctl enable --now klipper-mcu
+   ```
+3. Update `printer.cfg`:
+   ```ini
+   [mcu host]
+   serial: /tmp/klipper_host_mcu
+
+   [adxl345]
+   cs_pin: host:None
+   spi_bus: spidev1.0
+   ```
+
+This eliminates MCU overload during resonance testing — no more `tmcuart_response` timeouts.
+
 ---
 
 ## Current load verification
